@@ -1,13 +1,13 @@
 # Multi-Account Switcher for Claude Code
 
-A simple tool to manage and switch between multiple Claude Code accounts on macOS, Linux, and WSL.
+A simple tool to manage and switch between multiple Claude Code accounts on macOS and Linux.
 
 ## Features
 
 - **Multi-account management**: Add, remove, and list Claude Code accounts
 - **Quick switching**: Switch between accounts with simple commands
-- **Cross-platform**: Works on macOS, Linux, and WSL
-- **Secure storage**: Uses system keychain (macOS) or protected files (Linux/WSL)
+- **Cross-platform**: Works on macOS and Linux
+- **Secure storage**: Uses system keychain (macOS) or protected files (Linux)
 - **Settings preservation**: Only switches authentication - your themes, settings, and preferences remain unchanged
 
 ## Installation
@@ -79,7 +79,7 @@ sudo apt install jq
 The switcher stores account authentication data separately:
 
 - **macOS**: Credentials in Keychain, OAuth info in `~/.claude-switch-backup/`
-- **Linux/WSL**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
+- **Linux**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
 
 When switching accounts, it:
 
