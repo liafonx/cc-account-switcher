@@ -409,7 +409,7 @@ update_shell_profile() {
     # Remove existing cc-account-switcher block if present
     remove_from_shell_profile
     
-    # Add new exports to profile
+    # Add new exports to profile with blank line before marker for readability
     cat >> "$profile_file" << EOF
 
 $CC_MARKER_START
@@ -535,7 +535,6 @@ add_api_account_from_env() {
     init_sequence_file
     init_api_accounts_file
     
-    # Generate a unique identifier for this API account
     local account_name="${1:-API Account}"
     local account_num
     account_num=$(get_next_account_number)
@@ -1045,8 +1044,10 @@ perform_switch_to_api() {
     echo "Environment variables have been added to your shell profile and will be available"
     echo "in all new terminal sessions. For the current session, either:"
     echo ""
+    local profile_path
+    profile_path=$(detect_shell_profile)
     echo "  Option 1: Start a new terminal (recommended for IDE plugins)"
-    echo "  Option 2: Reload your shell profile: source $(detect_shell_profile)"
+    echo "  Option 2: Reload your shell profile: source $profile_path"
     echo "  Option 3: Source the API env file: source $HOME/.claude/.api_env"
     echo ""
     echo "Claude Code and IDE plugins will automatically use these environment variables."

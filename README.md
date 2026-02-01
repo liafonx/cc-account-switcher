@@ -71,10 +71,10 @@ export ANTHROPIC_AUTH_TOKEN='your-api-token'
    export ANTHROPIC_AUTH_TOKEN='your-api-token-here'
    ```
 2. Run `./ccswitch.sh --add-api-account "My API Name"` to add the API account
-3. To switch to this account: `./ccswitch.sh --switch-to <account_number>`
-4. **Important**: When switching to an API account, you must:
-   - Source the environment file: `source ~/.claude/.api_env`
-   - Start Claude Code from the same terminal to ensure environment variables are available
+3. Switch to this account: `./ccswitch.sh --switch-to <account_number>`
+4. The environment variables are automatically added to your shell profile for persistence across terminal sessions
+
+See the "Switching to an API Account" section below for details on activating the environment in your current session.
 
 > **What gets switched:** Only your authentication credentials change. Your themes, settings, preferences, and chat history remain exactly the same.
 
