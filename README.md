@@ -1,6 +1,6 @@
 # Multi-Account Switcher for Claude Code
 
-A simple tool to manage and switch between multiple Claude Code accounts on macOS, Linux, and WSL.
+A simple tool to manage and switch between multiple Claude Code accounts on macOS and Linux.
 
 ## Features
 
@@ -11,8 +11,8 @@ A simple tool to manage and switch between multiple Claude Code accounts on macO
 - **Automatic activation**: Wrapper function automatically activates API environment variables in your current shell
 - **Persistent configuration**: API credentials are automatically added to your shell profile (.zshrc/.bashrc) for persistence across terminal sessions
 - **IDE plugin support**: Works seamlessly with Claude Code IDE plugins (VS Code, JetBrains, etc.)
-- **Cross-platform**: Works on macOS, Linux, and WSL
-- **Secure storage**: Uses system keychain (macOS) or protected files (Linux/WSL)
+- **Cross-platform**: Works on macOS and Linux
+- **Secure storage**: Uses system keychain (macOS) or protected files (Linux)
 - **Settings preservation**: Only switches authentication - your themes, settings, and preferences remain unchanged
 
 ## Installation
@@ -217,7 +217,7 @@ The switcher stores account authentication data separately:
 
 - **OAuth Accounts**:
   - **macOS**: Credentials in Keychain, OAuth info in `~/.claude-switch-backup/`
-  - **Linux/WSL**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
+  - **Linux**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
 
 - **API Accounts**:
   - API endpoint URL and authentication token stored in `~/.claude-switch-backup/api_accounts.json`
