@@ -8,6 +8,7 @@ set -euo pipefail
 # Configuration
 readonly BACKUP_DIR="$HOME/.claude-switch-backup"
 readonly SEQUENCE_FILE="$BACKUP_DIR/sequence.json"
+readonly API_ACCOUNTS_FILE="$BACKUP_DIR/api_accounts.json"
 
 # Container detection
 is_running_in_container() {
@@ -291,6 +292,51 @@ write_account_config() {
     chmod 600 "$config_file"
 }
 
+# Setup API environment for Claude Code
+setup_api_environment() {
+    local account_num="$1"
+    
+    if [[ ! -f "$API_ACCOUNTS_FILE" ]]; then
+        echo "Error: API accounts file not found"
+        return 1
+    fi
+    
+    local api_data
+    api_data=$(jq -r --arg num "$account_num" '.accounts[$num] // empty' "$API_ACCOUNTS_FILE")
+    
+    if [[ -z "$api_data" ]]; then
+        echo "Error: No API account data found for Account-$account_num"
+        return 1
+    fi
+    
+    local base_url auth_token
+    base_url=$(echo "$api_data" | jq -r '.baseUrl')
+    auth_token=$(echo "$api_data" | jq -r '.authToken')
+    
+    # Create/update Claude Code environment configuration
+    # Note: Claude Code reads these from environment or config
+    local env_file="$HOME/.claude/.api_env"
+    mkdir -p "$HOME/.claude"
+    
+    cat > "$env_file" << EOF
+export ANTHROPIC_BASE_URL="$base_url"
+export ANTHROPIC_AUTH_TOKEN="$auth_token"
+EOF
+    chmod 600 "$env_file"
+    
+    echo "API environment configured. Base URL: $base_url"
+    echo "To activate, source this file before starting Claude Code:"
+    echo "  source $env_file"
+}
+
+# Clear API environment
+clear_api_environment() {
+    local env_file="$HOME/.claude/.api_env"
+    if [[ -f "$env_file" ]]; then
+        rm -f "$env_file"
+    fi
+}
+
 # Initialize sequence.json if it doesn't exist
 init_sequence_file() {
     if [[ ! -f "$SEQUENCE_FILE" ]]; then
@@ -301,6 +347,17 @@ init_sequence_file() {
   "accounts": {}
 }'
         write_json "$SEQUENCE_FILE" "$init_content"
+    fi
+}
+
+# Initialize api_accounts.json if it doesn't exist
+init_api_accounts_file() {
+    if [[ ! -f "$API_ACCOUNTS_FILE" ]]; then
+        local init_content='{
+  "lastUpdated": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "accounts": {}
+}'
+        write_json "$API_ACCOUNTS_FILE" "$init_content"
     fi
 }
 
@@ -326,8 +383,95 @@ account_exists() {
     jq -e --arg email "$email" '.accounts[] | select(.email == $email)' "$SEQUENCE_FILE" >/dev/null 2>&1
 }
 
+# Get account type (oauth or api)
+get_account_type() {
+    local account_num="$1"
+    if [[ ! -f "$SEQUENCE_FILE" ]]; then
+        echo "oauth"
+        return
+    fi
+    
+    local account_type
+    account_type=$(jq -r --arg num "$account_num" '.accounts[$num].type // "oauth"' "$SEQUENCE_FILE" 2>/dev/null)
+    echo "${account_type:-oauth}"
+}
+
+# Add API account from environment variables
+add_api_account_from_env() {
+    local base_url="${ANTHROPIC_BASE_URL:-}"
+    local auth_token="${ANTHROPIC_AUTH_TOKEN:-}"
+    
+    # Check each variable individually for better error messages
+    local missing_vars=()
+    if [[ -z "$base_url" ]]; then
+        missing_vars+=("ANTHROPIC_BASE_URL")
+    fi
+    if [[ -z "$auth_token" ]]; then
+        missing_vars+=("ANTHROPIC_AUTH_TOKEN")
+    fi
+    
+    if [[ ${#missing_vars[@]} -gt 0 ]]; then
+        echo "Error: The following environment variable(s) must be set: ${missing_vars[*]}"
+        exit 1
+    fi
+    
+    setup_directories
+    init_sequence_file
+    init_api_accounts_file
+    
+    # Generate a unique identifier for this API account
+    local account_name="${1:-API Account}"
+    local account_num
+    account_num=$(get_next_account_number)
+    
+    # Generate a unique identifier for this API account
+    local api_identifier="api-account-${account_num}"
+    
+    # Store API credentials
+    local updated_api_accounts
+    updated_api_accounts=$(jq --arg num "$account_num" --arg url "$base_url" --arg token "$auth_token" --arg name "$account_name" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        .accounts[$num] = {
+            name: $name,
+            baseUrl: $url,
+            authToken: $token,
+            added: $now
+        } |
+        .lastUpdated = $now
+    ' "$API_ACCOUNTS_FILE")
+    
+    write_json "$API_ACCOUNTS_FILE" "$updated_api_accounts"
+    
+    # Update sequence.json with unique identifier
+    local updated_sequence
+    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_identifier" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        .accounts[$num] = {
+            email: $name,
+            uuid: $uuid,
+            type: "api",
+            added: $now
+        } |
+        .sequence += [$num | tonumber] |
+        .lastUpdated = $now
+    ' "$SEQUENCE_FILE")
+    
+    write_json "$SEQUENCE_FILE" "$updated_sequence"
+    
+    echo "Added API Account $account_num: $account_name"
+    echo "  Base URL: $base_url"
+}
+
 # Add account
 cmd_add_account() {
+    local account_type="${1:-oauth}"
+    local account_name="${2:-}"
+    
+    # Handle API account
+    if [[ "$account_type" == "api" ]]; then
+        add_api_account_from_env "$account_name"
+        return
+    fi
+    
+    # Handle OAuth account
     setup_directories
     init_sequence_file
     
@@ -371,6 +515,7 @@ cmd_add_account() {
         .accounts[$num] = {
             email: $email,
             uuid: $uuid,
+            type: "oauth",
             added: $now
         } |
         .sequence += [$num | tonumber] |
@@ -445,15 +590,29 @@ cmd_remove_account() {
     # Remove backup files
     local platform
     platform=$(detect_platform)
-    case "$platform" in
-        macos)
-            security delete-generic-password -s "Claude Code-Account-${account_num}-${email}" 2>/dev/null || true
-            ;;
-        linux|wsl)
-            rm -f "$BACKUP_DIR/credentials/.claude-credentials-${account_num}-${email}.json"
-            ;;
-    esac
-    rm -f "$BACKUP_DIR/configs/.claude-config-${account_num}-${email}.json"
+    local account_type
+    account_type=$(get_account_type "$account_num")
+    
+    if [[ "$account_type" == "api" ]]; then
+        # Remove API account data
+        local updated_api_accounts
+        updated_api_accounts=$(jq --arg num "$account_num" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+            del(.accounts[$num]) |
+            .lastUpdated = $now
+        ' "$API_ACCOUNTS_FILE")
+        write_json "$API_ACCOUNTS_FILE" "$updated_api_accounts"
+    else
+        # Remove OAuth account data
+        case "$platform" in
+            macos)
+                security delete-generic-password -s "Claude Code-Account-${account_num}-${email}" 2>/dev/null || true
+                ;;
+            linux|wsl)
+                rm -f "$BACKUP_DIR/credentials/.claude-credentials-${account_num}-${email}.json"
+                ;;
+        esac
+        rm -f "$BACKUP_DIR/configs/.claude-config-${account_num}-${email}.json"
+    fi
     
     # Update sequence.json
     local updated_sequence
@@ -513,9 +672,9 @@ cmd_list() {
         .sequence[] as $num |
         .accounts["\($num)"] |
         if "\($num)" == $active then
-            "  \($num): \(.email) (active)"
+            "  \($num): \(.email) [\(.type // "oauth")] (active)"
         else
-            "  \($num): \(.email)"
+            "  \($num): \(.email) [\(.type // "oauth")]"
         end
     ' "$SEQUENCE_FILE"
 }
@@ -527,30 +686,46 @@ cmd_switch() {
         exit 1
     fi
     
-    local current_email
-    current_email=$(get_current_account)
-    
-    if [[ "$current_email" == "none" ]]; then
-        echo "Error: No active Claude account found"
-        exit 1
-    fi
-    
-    # Check if current account is managed
-    if ! account_exists "$current_email"; then
-        echo "Notice: Active account '$current_email' was not managed."
-        cmd_add_account
-        local account_num
-        account_num=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
-        echo "It has been automatically added as Account-$account_num."
-        echo "Please run './ccswitch.sh --switch' again to switch to the next account."
-        exit 0
-    fi
-    
-    # wait_for_claude_close
-    
     local active_account sequence
     active_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
     sequence=($(jq -r '.sequence[]' "$SEQUENCE_FILE"))
+    
+    # If no active account, start with the first one
+    if [[ -z "$active_account" || "$active_account" == "null" ]]; then
+        if [[ ${#sequence[@]} -eq 0 ]]; then
+            echo "Error: No accounts available to switch to"
+            exit 1
+        fi
+        perform_switch "${sequence[0]}"
+        return
+    fi
+    
+    # Check if current active account type is OAuth and verify it matches
+    local active_type
+    active_type=$(get_account_type "$active_account")
+    
+    if [[ "$active_type" == "oauth" ]]; then
+        local current_email
+        current_email=$(get_current_account)
+        
+        if [[ "$current_email" == "none" ]]; then
+            echo "Error: No active Claude account found"
+            exit 1
+        fi
+        
+        # Check if current account is managed
+        if ! account_exists "$current_email"; then
+            echo "Notice: Active account '$current_email' was not managed."
+            cmd_add_account "oauth"
+            local account_num
+            account_num=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
+            echo "It has been automatically added as Account-$account_num."
+            echo "Please run './ccswitch.sh --switch' again to switch to the next account."
+            exit 0
+        fi
+    fi
+    
+    # wait_for_claude_close
     
     # Find next account in sequence
     local next_account current_index=0
@@ -615,19 +790,47 @@ cmd_switch_to() {
 perform_switch() {
     local target_account="$1"
     
+    # Get target account type
+    local target_type
+    target_type=$(get_account_type "$target_account")
+    
+    if [[ "$target_type" == "api" ]]; then
+        # Switching to API account
+        perform_switch_to_api "$target_account"
+    else
+        # Switching to OAuth account
+        perform_switch_to_oauth "$target_account"
+    fi
+}
+
+# Perform switch to OAuth account
+perform_switch_to_oauth() {
+    local target_account="$1"
+    
     # Get current and target account info
     local current_account target_email current_email
     current_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
     target_email=$(jq -r --arg num "$target_account" '.accounts[$num].email' "$SEQUENCE_FILE")
     current_email=$(get_current_account)
     
-    # Step 1: Backup current account
-    local current_creds current_config
-    current_creds=$(read_credentials)
-    current_config=$(cat "$(get_claude_config_path)")
+    # If current account is OAuth, backup it first
+    local current_type
+    current_type=$(get_account_type "$current_account")
     
-    write_account_credentials "$current_account" "$current_email" "$current_creds"
-    write_account_config "$current_account" "$current_email" "$current_config"
+    if [[ "$current_type" == "oauth" && "$current_account" != "null" ]]; then
+        # Step 1: Backup current account
+        local current_creds current_config
+        current_creds=$(read_credentials)
+        current_config=$(cat "$(get_claude_config_path)")
+        
+        write_account_credentials "$current_account" "$current_email" "$current_creds"
+        write_account_config "$current_account" "$current_email" "$current_config"
+    fi
+    
+    # Clear API environment if switching from API account
+    if [[ "$current_type" == "api" ]]; then
+        clear_api_environment
+    fi
     
     # Step 2: Retrieve target account
     local target_creds target_config
@@ -670,13 +873,62 @@ perform_switch() {
     
     write_json "$SEQUENCE_FILE" "$updated_sequence"
     
-    echo "Switched to Account-$target_account ($target_email)"
+    echo "Switched to Account-$target_account ($target_email) [oauth]"
     # Display updated account list
     cmd_list
     echo ""
     echo "Please restart Claude Code to use the new authentication."
     echo ""
+}
+
+# Perform switch to API account
+perform_switch_to_api() {
+    local target_account="$1"
     
+    # Get current account info
+    local current_account current_email
+    current_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
+    current_email=$(get_current_account)
+    
+    # If current account is OAuth, backup it first
+    local current_type
+    current_type=$(get_account_type "$current_account")
+    
+    if [[ "$current_type" == "oauth" && -n "$current_account" && "$current_account" != "null" && "$current_email" != "none" ]]; then
+        local current_creds current_config
+        current_creds=$(read_credentials)
+        current_config=$(cat "$(get_claude_config_path)")
+        
+        write_account_credentials "$current_account" "$current_email" "$current_creds"
+        write_account_config "$current_account" "$current_email" "$current_config"
+    fi
+    
+    # Setup API environment
+    setup_api_environment "$target_account"
+    
+    # Get account name
+    local account_name
+    account_name=$(jq -r --arg num "$target_account" '.accounts[$num].email' "$SEQUENCE_FILE")
+    
+    # Update state
+    local updated_sequence
+    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        .activeAccountNumber = ($num | tonumber) |
+        .lastUpdated = $now
+    ' "$SEQUENCE_FILE")
+    
+    write_json "$SEQUENCE_FILE" "$updated_sequence"
+    
+    echo ""
+    echo "Switched to Account-$target_account ($account_name) [api]"
+    # Display updated account list
+    cmd_list
+    echo ""
+    echo "IMPORTANT: To use this API account, you must:"
+    echo "  1. Source the environment file: source $HOME/.claude/.api_env"
+    echo "  2. Start Claude Code from the same terminal session"
+    echo "     This ensures ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN are available"
+    echo ""
 }
 
 # Show usage
@@ -685,7 +937,8 @@ show_usage() {
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  --add-account                    Add current account to managed accounts"
+    echo "  --add-account                    Add current OAuth account to managed accounts"
+    echo "  --add-api-account [name]        Add API account from ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN"
     echo "  --remove-account <num|email>    Remove account by number or email"
     echo "  --list                           List all managed accounts"
     echo "  --switch                         Rotate to next account in sequence"
@@ -693,7 +946,15 @@ show_usage() {
     echo "  --help                           Show this help message"
     echo ""
     echo "Examples:"
+    echo "  # Add OAuth account (must be logged in to Claude Code first)"
     echo "  $0 --add-account"
+    echo ""
+    echo "  # Add API account (requires environment variables)"
+    echo "  export ANTHROPIC_BASE_URL='https://api.example.com'"
+    echo "  export ANTHROPIC_AUTH_TOKEN='your-api-token'"
+    echo "  $0 --add-api-account \"My Custom API\""
+    echo ""
+    echo "  # List and switch accounts"
     echo "  $0 --list"
     echo "  $0 --switch"
     echo "  $0 --switch-to 2"
@@ -714,7 +975,11 @@ main() {
     
     case "${1:-}" in
         --add-account)
-            cmd_add_account
+            cmd_add_account "oauth"
+            ;;
+        --add-api-account)
+            shift
+            cmd_add_account "api" "${1:-API Account}"
             ;;
         --remove-account)
             shift
