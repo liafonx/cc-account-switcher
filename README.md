@@ -107,6 +107,12 @@ API accounts allow you to use Claude Code with custom API endpoints instead of t
    export ANTHROPIC_AUTH_TOKEN='your-api-key-or-token'
    ```
 
+   > **Security Note**: Setting tokens directly in your shell may expose them in your shell history. Consider using one of these safer alternatives:
+   > - Use a password manager that can inject environment variables
+   > - Read from a secure file: `export ANTHROPIC_AUTH_TOKEN=$(cat ~/.secrets/api_token)`
+   > - Use a `.env` file that's gitignored: `source ~/.config/api.env`
+   > - Clear your history after setting: `history -d $((HISTCMD-1))`
+
 2. Add the API account:
    ```bash
    ./ccswitch.sh --add-api-account "My Custom API"
@@ -191,9 +197,11 @@ Your current Claude Code login will remain active.
 
 ## Security Notes
 
-- Credentials stored in macOS Keychain or files with 600 permissions
+- OAuth credentials stored in macOS Keychain or files with 600 permissions
+- API credentials stored in files with 600 permissions (only readable by file owner)
 - Authentication files are stored with restricted permissions (600)
 - The tool requires Claude Code to be closed during account switches
+- **Important**: API tokens are stored in plain text (with 600 permissions) in `~/.claude-switch-backup/api_accounts.json`. Ensure your home directory is properly secured and encrypted.
 
 ## License
 

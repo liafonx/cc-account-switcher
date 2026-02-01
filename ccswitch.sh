@@ -401,8 +401,17 @@ add_api_account_from_env() {
     local base_url="${ANTHROPIC_BASE_URL:-}"
     local auth_token="${ANTHROPIC_AUTH_TOKEN:-}"
     
-    if [[ -z "$base_url" || -z "$auth_token" ]]; then
-        echo "Error: ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN environment variables must be set"
+    # Check each variable individually for better error messages
+    local missing_vars=()
+    if [[ -z "$base_url" ]]; then
+        missing_vars+=("ANTHROPIC_BASE_URL")
+    fi
+    if [[ -z "$auth_token" ]]; then
+        missing_vars+=("ANTHROPIC_AUTH_TOKEN")
+    fi
+    
+    if [[ ${#missing_vars[@]} -gt 0 ]]; then
+        echo "Error: The following environment variable(s) must be set: ${missing_vars[*]}"
         exit 1
     fi
     
@@ -414,6 +423,9 @@ add_api_account_from_env() {
     local account_name="${1:-API Account}"
     local account_num
     account_num=$(get_next_account_number)
+    
+    # Generate a unique UUID for this API account
+    local api_uuid="api-account-${account_num}"
     
     # Store API credentials
     local updated_api_accounts
@@ -429,12 +441,12 @@ add_api_account_from_env() {
     
     write_json "$API_ACCOUNTS_FILE" "$updated_api_accounts"
     
-    # Update sequence.json
+    # Update sequence.json with unique UUID
     local updated_sequence
-    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_uuid" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
         .accounts[$num] = {
             email: $name,
-            uuid: "api-account",
+            uuid: $uuid,
             type: "api",
             added: $now
         } |
@@ -866,7 +878,7 @@ perform_switch_to_api() {
     local current_type
     current_type=$(get_account_type "$current_account")
     
-    if [[ "$current_type" == "oauth" && "$current_account" != "null" && "$current_email" != "none" ]]; then
+    if [[ "$current_type" == "oauth" && -n "$current_account" && "$current_account" != "null" && "$current_email" != "none" ]]; then
         local current_creds current_config
         current_creds=$(read_credentials)
         current_config=$(cat "$(get_claude_config_path)")
