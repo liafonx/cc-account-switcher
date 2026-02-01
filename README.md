@@ -7,6 +7,8 @@ A simple tool to manage and switch between multiple Claude Code accounts on macO
 - **Multi-account management**: Add, remove, and list Claude Code accounts
 - **Quick switching**: Switch between accounts with simple commands
 - **OAuth and API support**: Manage both Claude official subscription accounts (OAuth) and custom API endpoints
+- **Persistent configuration**: API credentials are automatically added to your shell profile (.zshrc/.bashrc) for persistence across terminal sessions
+- **IDE plugin support**: Works seamlessly with Claude Code IDE plugins (VS Code, JetBrains, etc.)
 - **Cross-platform**: Works on macOS, Linux, and WSL
 - **Secure storage**: Uses system keychain (macOS) or protected files (Linux/WSL)
 - **Settings preservation**: Only switches authentication - your themes, settings, and preferences remain unchanged
@@ -69,10 +71,10 @@ export ANTHROPIC_AUTH_TOKEN='your-api-token'
    export ANTHROPIC_AUTH_TOKEN='your-api-token-here'
    ```
 2. Run `./ccswitch.sh --add-api-account "My API Name"` to add the API account
-3. To switch to this account: `./ccswitch.sh --switch-to <account_number>`
-4. **Important**: When switching to an API account, you must:
-   - Source the environment file: `source ~/.claude/.api_env`
-   - Start Claude Code from the same terminal to ensure environment variables are available
+3. Switch to this account: `./ccswitch.sh --switch-to <account_number>`
+4. The environment variables are automatically added to your shell profile for persistence across terminal sessions
+
+See the "Switching to an API Account" section below for details on activating the environment in your current session.
 
 > **What gets switched:** Only your authentication credentials change. Your themes, settings, preferences, and chat history remain exactly the same.
 
@@ -120,25 +122,31 @@ API accounts allow you to use Claude Code with custom API endpoints instead of t
 
 ### Switching to an API Account
 
-When you switch to an API account, the script creates an environment file at `~/.claude/.api_env`:
+When you switch to an API account, the script automatically:
+
+1. **Updates your shell profile** (`.zshrc`, `.bashrc`, etc.) with the API environment variables
+2. Creates a temporary environment file at `~/.claude/.api_env`
 
 ```bash
 ./ccswitch.sh --switch-to 2  # or use the account number from --list
 ```
 
-**Important**: To use the API account with Claude Code:
+**Persistence Across Terminal Sessions**:
 
-1. Source the environment file in your terminal:
-   ```bash
-   source ~/.claude/.api_env
-   ```
+The environment variables are automatically added to your shell profile, so they persist across terminal sessions. You have three options to activate them:
 
-2. Launch Claude Code from the same terminal session:
-   ```bash
-   claude  # or however you normally start Claude Code
-   ```
+1. **Start a new terminal** (recommended for IDE plugins) - Variables are automatically available
+2. **Reload your shell profile**: `source ~/.zshrc` (or `~/.bashrc` for Bash users)
+3. **Source the API env file**: `source ~/.claude/.api_env` (temporary, current session only)
 
-The environment variables `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` will be available to Claude Code, allowing it to use your custom API endpoint.
+**Claude Code IDE Plugin Support**:
+
+When using Claude Code as an IDE plugin (VS Code, JetBrains, etc.), the environment variables from your shell profile are automatically available. After switching accounts, simply:
+
+- Restart your IDE, or
+- Reload the IDE window
+
+The plugin will automatically read `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from your environment.
 
 ### Switching Between OAuth and API Accounts
 
@@ -157,14 +165,20 @@ The switcher stores account authentication data separately:
 
 - **API Accounts**:
   - API endpoint URL and authentication token stored in `~/.claude-switch-backup/api_accounts.json`
-  - When switching to an API account, creates `~/.claude/.api_env` with environment variables
+  - When switching to an API account:
+    - Creates `~/.claude/.api_env` with environment variables for the current session
+    - Updates your shell profile (`.zshrc`, `.bashrc`, etc.) for persistence across terminal sessions
+  - Environment variables are automatically available to Claude Code and IDE plugins
 
 When switching accounts, it:
 
 1. Backs up the current account's authentication data (if OAuth)
 2. Restores the target account's authentication data
-3. For OAuth: Updates Claude Code's authentication files
-4. For API: Sets up environment file for ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN
+3. For OAuth: Updates Claude Code's authentication files and removes API environment variables
+4. For API: 
+   - Sets up environment file at `~/.claude/.api_env`
+   - Updates shell profile with `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN`
+   - Variables persist across terminal sessions and are available to IDE plugins
 
 ## Troubleshooting
 

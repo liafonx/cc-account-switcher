@@ -9,6 +9,8 @@ set -euo pipefail
 readonly BACKUP_DIR="$HOME/.claude-switch-backup"
 readonly SEQUENCE_FILE="$BACKUP_DIR/sequence.json"
 readonly API_ACCOUNTS_FILE="$BACKUP_DIR/api_accounts.json"
+readonly CC_MARKER_START="# >>> cc-account-switcher >>>"
+readonly CC_MARKER_END="# <<< cc-account-switcher <<<"
 
 # Container detection
 is_running_in_container() {
@@ -324,9 +326,10 @@ export ANTHROPIC_AUTH_TOKEN="$auth_token"
 EOF
     chmod 600 "$env_file"
     
+    # Update shell profile for persistence across terminal sessions
+    update_shell_profile "$base_url" "$auth_token"
+    
     echo "API environment configured. Base URL: $base_url"
-    echo "To activate, source this file before starting Claude Code:"
-    echo "  source $env_file"
 }
 
 # Clear API environment
@@ -335,6 +338,119 @@ clear_api_environment() {
     if [[ -f "$env_file" ]]; then
         rm -f "$env_file"
     fi
+    
+    # Remove exports from shell profile
+    remove_from_shell_profile
+}
+
+# Detect user's shell profile file
+detect_shell_profile() {
+    # Detect shell type
+    local shell_name
+    shell_name=$(basename "${SHELL:-/bin/bash}")
+    
+    # Check for common profile files in order of preference
+    local profile_file=""
+    
+    case "$shell_name" in
+        zsh)
+            # For zsh, prefer .zshrc
+            if [[ -f "$HOME/.zshrc" ]]; then
+                profile_file="$HOME/.zshrc"
+            elif [[ -f "$HOME/.zprofile" ]]; then
+                profile_file="$HOME/.zprofile"
+            else
+                # Create .zshrc if it doesn't exist
+                touch "$HOME/.zshrc"
+                profile_file="$HOME/.zshrc"
+            fi
+            ;;
+        bash)
+            # For bash, prefer .bashrc, then .bash_profile
+            if [[ -f "$HOME/.bashrc" ]]; then
+                profile_file="$HOME/.bashrc"
+            elif [[ -f "$HOME/.bash_profile" ]]; then
+                profile_file="$HOME/.bash_profile"
+            elif [[ -f "$HOME/.profile" ]]; then
+                profile_file="$HOME/.profile"
+            else
+                # Create .bashrc if it doesn't exist
+                touch "$HOME/.bashrc"
+                profile_file="$HOME/.bashrc"
+            fi
+            ;;
+        *)
+            # Default to .profile for other shells
+            if [[ -f "$HOME/.profile" ]]; then
+                profile_file="$HOME/.profile"
+            else
+                touch "$HOME/.profile"
+                profile_file="$HOME/.profile"
+            fi
+            ;;
+    esac
+    
+    echo "$profile_file"
+}
+
+# Update shell profile with API environment variables
+update_shell_profile() {
+    local base_url="$1"
+    local auth_token="$2"
+    
+    local profile_file
+    profile_file=$(detect_shell_profile)
+    
+    if [[ -z "$profile_file" ]]; then
+        echo "Warning: Could not detect shell profile file"
+        return 1
+    fi
+    
+    # Remove existing cc-account-switcher block if present
+    remove_from_shell_profile
+    
+    # Add new exports to profile with blank line before marker for readability
+    cat >> "$profile_file" << EOF
+
+$CC_MARKER_START
+# Claude Code API Configuration - managed by cc-account-switcher
+export ANTHROPIC_BASE_URL="$base_url"
+export ANTHROPIC_AUTH_TOKEN="$auth_token"
+$CC_MARKER_END
+EOF
+    
+    echo "Updated shell profile: $profile_file"
+    echo "Changes will take effect in new terminal sessions or after running:"
+    echo "  source $profile_file"
+}
+
+# Remove cc-account-switcher exports from shell profile
+remove_from_shell_profile() {
+    local profile_file
+    profile_file=$(detect_shell_profile)
+    
+    if [[ -z "$profile_file" || ! -f "$profile_file" ]]; then
+        return 0
+    fi
+    
+    # Check if markers exist
+    if ! grep -q "$CC_MARKER_START" "$profile_file" 2>/dev/null; then
+        return 0
+    fi
+    
+    # Create temporary file
+    local temp_file
+    temp_file=$(mktemp "${profile_file}.XXXXXX")
+    
+    # Remove lines between markers (inclusive)
+    awk -v start="$CC_MARKER_START" -v end="$CC_MARKER_END" '
+        $0 ~ start { skip=1; next }
+        $0 ~ end { skip=0; next }
+        !skip { print }
+    ' "$profile_file" > "$temp_file"
+    
+    # Replace original file
+    mv "$temp_file" "$profile_file"
 }
 
 # Initialize sequence.json if it doesn't exist
@@ -419,7 +535,6 @@ add_api_account_from_env() {
     init_sequence_file
     init_api_accounts_file
     
-    # Generate a unique identifier for this API account
     local account_name="${1:-API Account}"
     local account_num
     account_num=$(get_next_account_number)
@@ -924,10 +1039,18 @@ perform_switch_to_api() {
     # Display updated account list
     cmd_list
     echo ""
-    echo "IMPORTANT: To use this API account, you must:"
-    echo "  1. Source the environment file: source $HOME/.claude/.api_env"
-    echo "  2. Start Claude Code from the same terminal session"
-    echo "     This ensures ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN are available"
+    echo "API account activated!"
+    echo ""
+    echo "Environment variables have been added to your shell profile and will be available"
+    echo "in all new terminal sessions. For the current session, either:"
+    echo ""
+    local profile_path
+    profile_path=$(detect_shell_profile)
+    echo "  Option 1: Start a new terminal (recommended for IDE plugins)"
+    echo "  Option 2: Reload your shell profile: source $profile_path"
+    echo "  Option 3: Source the API env file: source $HOME/.claude/.api_env"
+    echo ""
+    echo "Claude Code and IDE plugins will automatically use these environment variables."
     echo ""
 }
 
