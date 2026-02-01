@@ -1,6 +1,6 @@
 # Multi-Account Switcher for Claude Code
 
-A simple command-line tool to manage and switch between multiple Claude Code accounts on macOS and Linux.
+A simple command-line tool to manage and switch between multiple Claude Code accounts on macOS and Linux (including WSL).
 
 ## Features
 
@@ -154,7 +154,7 @@ The switcher stores account authentication data separately:
 
 **OAuth Accounts:**
 - **macOS**: Credentials in Keychain, OAuth info in `~/.claude-switch-backup/`
-- **Linux**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
+- **Linux/WSL**: Both credentials and OAuth info in `~/.claude-switch-backup/` with restricted permissions
 
 **API Accounts:**
 - API endpoint URL and token stored in `~/.claude-switch-backup/api_accounts.json`
