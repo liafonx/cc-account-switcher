@@ -496,7 +496,7 @@ cmd_switch() {
     
     local active_account sequence
     active_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
-    sequence=($(jq -r '.sequence[]' "$SEQUENCE_FILE"))
+    mapfile -t sequence < <(jq -r '.sequence[]' "$SEQUENCE_FILE")
     
     # Find next account in sequence
     local next_account current_index=0
@@ -597,8 +597,7 @@ perform_switch() {
     
     # Merge with current config and validate
     local merged_config
-    merged_config=$(jq --argjson oauth "$oauth_section" '.oauthAccount = $oauth' "$(get_claude_config_path)" 2>/dev/null)
-    if [[ $? -ne 0 ]]; then
+    if ! merged_config=$(jq --argjson oauth "$oauth_section" '.oauthAccount = $oauth' "$(get_claude_config_path)" 2>/dev/null); then
         echo "Error: Failed to merge config"
         exit 1
     fi
