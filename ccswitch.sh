@@ -686,30 +686,46 @@ cmd_switch() {
         exit 1
     fi
     
-    local current_email
-    current_email=$(get_current_account)
-    
-    if [[ "$current_email" == "none" ]]; then
-        echo "Error: No active Claude account found"
-        exit 1
-    fi
-    
-    # Check if current account is managed
-    if ! account_exists "$current_email"; then
-        echo "Notice: Active account '$current_email' was not managed."
-        cmd_add_account
-        local account_num
-        account_num=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
-        echo "It has been automatically added as Account-$account_num."
-        echo "Please run './ccswitch.sh --switch' again to switch to the next account."
-        exit 0
-    fi
-    
-    # wait_for_claude_close
-    
     local active_account sequence
     active_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
     sequence=($(jq -r '.sequence[]' "$SEQUENCE_FILE"))
+    
+    # If no active account, start with the first one
+    if [[ -z "$active_account" || "$active_account" == "null" ]]; then
+        if [[ ${#sequence[@]} -eq 0 ]]; then
+            echo "Error: No accounts available to switch to"
+            exit 1
+        fi
+        perform_switch "${sequence[0]}"
+        return
+    fi
+    
+    # Check if current active account type is OAuth and verify it matches
+    local active_type
+    active_type=$(get_account_type "$active_account")
+    
+    if [[ "$active_type" == "oauth" ]]; then
+        local current_email
+        current_email=$(get_current_account)
+        
+        if [[ "$current_email" == "none" ]]; then
+            echo "Error: No active Claude account found"
+            exit 1
+        fi
+        
+        # Check if current account is managed
+        if ! account_exists "$current_email"; then
+            echo "Notice: Active account '$current_email' was not managed."
+            cmd_add_account "oauth"
+            local account_num
+            account_num=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
+            echo "It has been automatically added as Account-$account_num."
+            echo "Please run './ccswitch.sh --switch' again to switch to the next account."
+            exit 0
+        fi
+    fi
+    
+    # wait_for_claude_close
     
     # Find next account in sequence
     local next_account current_index=0
