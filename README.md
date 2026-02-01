@@ -108,10 +108,10 @@ API accounts allow you to use Claude Code with custom API endpoints instead of t
    ```
 
    > **Security Note**: Setting tokens directly in your shell may expose them in your shell history. Consider using one of these safer alternatives:
+   > - Prepend commands with a space if your shell has `HISTCONTROL=ignorespace` set (most Bash configurations)
    > - Use a password manager that can inject environment variables
    > - Read from a secure file: `export ANTHROPIC_AUTH_TOKEN=$(cat ~/.secrets/api_token)`
    > - Use a `.env` file that's gitignored: `source ~/.config/api.env`
-   > - Clear your history after setting: `history -d $((HISTCMD-1))`
 
 2. Add the API account:
    ```bash
@@ -198,10 +198,12 @@ Your current Claude Code login will remain active.
 ## Security Notes
 
 - OAuth credentials stored in macOS Keychain or files with 600 permissions
-- API credentials stored in files with 600 permissions (only readable by file owner)
+- API credentials stored in files with 600 permissions (only readable by file owner):
+  - `~/.claude-switch-backup/api_accounts.json` - Permanent storage of API credentials
+  - `~/.claude/.api_env` - Active API environment file (created when switching to an API account)
 - Authentication files are stored with restricted permissions (600)
 - The tool requires Claude Code to be closed during account switches
-- **Important**: API tokens are stored in plain text (with 600 permissions) in `~/.claude-switch-backup/api_accounts.json`. Ensure your home directory is properly secured and encrypted.
+- **Important**: API tokens are stored in plain text (with 600 permissions). Ensure your home directory is properly secured and encrypted.
 
 ## License
 

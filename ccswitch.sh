@@ -424,8 +424,8 @@ add_api_account_from_env() {
     local account_num
     account_num=$(get_next_account_number)
     
-    # Generate a unique UUID for this API account
-    local api_uuid="api-account-${account_num}"
+    # Generate a unique identifier for this API account
+    local api_identifier="api-account-${account_num}"
     
     # Store API credentials
     local updated_api_accounts
@@ -441,9 +441,9 @@ add_api_account_from_env() {
     
     write_json "$API_ACCOUNTS_FILE" "$updated_api_accounts"
     
-    # Update sequence.json with unique UUID
+    # Update sequence.json with unique identifier
     local updated_sequence
-    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_uuid" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_identifier" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
         .accounts[$num] = {
             email: $name,
             uuid: $uuid,
