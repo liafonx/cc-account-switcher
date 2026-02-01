@@ -263,6 +263,28 @@ write_account_config() {
     chmod 600 "$config_file"
 }
 
+# Backup current OAuth account credentials and config
+backup_current_oauth_account() {
+    local current_account="$1"
+    local current_email="$2"
+    local current_creds current_config
+    current_creds=$(read_credentials)
+    current_config=$(cat "$(get_claude_config_path)")
+    write_account_credentials "$current_account" "$current_email" "$current_creds"
+    write_account_config "$current_account" "$current_email" "$current_config"
+}
+
+# Update active account in sequence file
+update_active_account() {
+    local target_account="$1"
+    local updated_sequence
+    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        .activeAccountNumber = ($num | tonumber) |
+        .lastUpdated = $now
+    ' "$SEQUENCE_FILE")
+    write_json "$SEQUENCE_FILE" "$updated_sequence"
+}
+
 # Setup API environment for Claude Code
 setup_api_environment() {
     local account_num="$1"
@@ -903,12 +925,7 @@ perform_switch_to_oauth() {
     
     if [[ "$current_type" == "oauth" && "$current_account" != "null" ]]; then
         # Step 1: Backup current account
-        local current_creds current_config
-        current_creds=$(read_credentials)
-        current_config=$(cat "$(get_claude_config_path)")
-        
-        write_account_credentials "$current_account" "$current_email" "$current_creds"
-        write_account_config "$current_account" "$current_email" "$current_config"
+        backup_current_oauth_account "$current_account" "$current_email"
     fi
     
     # Clear API environment if switching from API account
@@ -948,13 +965,7 @@ perform_switch_to_oauth() {
     write_json "$(get_claude_config_path)" "$merged_config"
     
     # Step 4: Update state
-    local updated_sequence
-    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        .activeAccountNumber = ($num | tonumber) |
-        .lastUpdated = $now
-    ' "$SEQUENCE_FILE")
-    
-    write_json "$SEQUENCE_FILE" "$updated_sequence"
+    update_active_account "$target_account"
     
     echo "Switched to Account-$target_account ($target_email) [oauth]"
     # Display updated account list
@@ -978,12 +989,7 @@ perform_switch_to_api() {
     current_type=$(get_account_type "$current_account")
     
     if [[ "$current_type" == "oauth" && -n "$current_account" && "$current_account" != "null" && "$current_email" != "none" ]]; then
-        local current_creds current_config
-        current_creds=$(read_credentials)
-        current_config=$(cat "$(get_claude_config_path)")
-        
-        write_account_credentials "$current_account" "$current_email" "$current_creds"
-        write_account_config "$current_account" "$current_email" "$current_config"
+        backup_current_oauth_account "$current_account" "$current_email"
     fi
     
     # Setup API environment
@@ -994,13 +1000,7 @@ perform_switch_to_api() {
     account_name=$(jq -r --arg num "$target_account" '.accounts[$num].email' "$SEQUENCE_FILE")
     
     # Update state
-    local updated_sequence
-    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        .activeAccountNumber = ($num | tonumber) |
-        .lastUpdated = $now
-    ' "$SEQUENCE_FILE")
-    
-    write_json "$SEQUENCE_FILE" "$updated_sequence"
+    update_active_account "$target_account"
     
     echo ""
     echo "Switched to Account-$target_account ($account_name) [api]"
