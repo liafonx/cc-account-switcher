@@ -72,11 +72,7 @@ get_claude_config_path() {
 
 # Get ISO 8601 timestamp - cross-platform compatible
 get_iso_timestamp() {
-    # Try GNU date (Linux)
-    if date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null; then
-        return 0
-    fi
-    # Try BSD date (macOS)
+    # Works on both GNU (Linux) and BSD (macOS) date
     if date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null; then
         return 0
     fi
