@@ -9,42 +9,11 @@ set -euo pipefail
 readonly BACKUP_DIR="$HOME/.claude-switch-backup"
 readonly SEQUENCE_FILE="$BACKUP_DIR/sequence.json"
 
-# Container detection
-is_running_in_container() {
-    # Check for Docker environment file
-    if [[ -f /.dockerenv ]]; then
-        return 0
-    fi
-    
-    # Check cgroup for container indicators
-    if [[ -f /proc/1/cgroup ]] && grep -q 'docker\|lxc\|containerd\|kubepods' /proc/1/cgroup 2>/dev/null; then
-        return 0
-    fi
-    
-    # Check mount info for container filesystems
-    if [[ -f /proc/self/mountinfo ]] && grep -q 'docker\|overlay' /proc/self/mountinfo 2>/dev/null; then
-        return 0
-    fi
-    
-    # Check for common container environment variables
-    if [[ -n "${CONTAINER:-}" ]] || [[ -n "${container:-}" ]]; then
-        return 0
-    fi
-    
-    return 1
-}
-
 # Platform detection
 detect_platform() {
     case "$(uname -s)" in
         Darwin) echo "macos" ;;
-        Linux) 
-            if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-                echo "wsl"
-            else
-                echo "linux"
-            fi
-            ;;
+        Linux) echo "linux" ;;
         *) echo "unknown" ;;
     esac
 }
@@ -150,27 +119,6 @@ setup_directories() {
     chmod 700 "$BACKUP_DIR"/{configs,credentials}
 }
 
-# Claude Code process detection (Node.js app)
-is_claude_running() {
-    ps -eo pid,comm,args | awk '$2 == "claude" || $3 == "claude" {exit 0} END {exit 1}'
-}
-
-# Wait for Claude Code to close (no timeout - user controlled)
-wait_for_claude_close() {
-    if ! is_claude_running; then
-        return 0
-    fi
-    
-    echo "Claude Code is running. Please close it first."
-    echo "Waiting for Claude Code to close..."
-    
-    while is_claude_running; do
-        sleep 1
-    done
-    
-    echo "Claude Code closed. Continuing..."
-}
-
 # Get current account info from .claude.json
 get_current_account() {
     if [[ ! -f "$(get_claude_config_path)" ]]; then
@@ -197,7 +145,7 @@ read_credentials() {
         macos)
             security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || echo ""
             ;;
-        linux|wsl)
+        linux)
             if [[ -f "$HOME/.claude/.credentials.json" ]]; then
                 cat "$HOME/.claude/.credentials.json"
             else
@@ -217,7 +165,7 @@ write_credentials() {
         macos)
             security add-generic-password -U -s "Claude Code-credentials" -a "$USER" -w "$credentials" 2>/dev/null
             ;;
-        linux|wsl)
+        linux)
             mkdir -p "$HOME/.claude"
             printf '%s' "$credentials" > "$HOME/.claude/.credentials.json"
             chmod 600 "$HOME/.claude/.credentials.json"
@@ -236,7 +184,7 @@ read_account_credentials() {
         macos)
             security find-generic-password -s "Claude Code-Account-${account_num}-${email}" -w 2>/dev/null || echo ""
             ;;
-        linux|wsl)
+        linux)
             local cred_file="$BACKUP_DIR/credentials/.claude-credentials-${account_num}-${email}.json"
             if [[ -f "$cred_file" ]]; then
                 cat "$cred_file"
@@ -259,7 +207,7 @@ write_account_credentials() {
         macos)
             security add-generic-password -U -s "Claude Code-Account-${account_num}-${email}" -a "$USER" -w "$credentials" 2>/dev/null
             ;;
-        linux|wsl)
+        linux)
             local cred_file="$BACKUP_DIR/credentials/.claude-credentials-${account_num}-${email}.json"
             printf '%s' "$credentials" > "$cred_file"
             chmod 600 "$cred_file"
@@ -449,7 +397,7 @@ cmd_remove_account() {
         macos)
             security delete-generic-password -s "Claude Code-Account-${account_num}-${email}" 2>/dev/null || true
             ;;
-        linux|wsl)
+        linux)
             rm -f "$BACKUP_DIR/credentials/.claude-credentials-${account_num}-${email}.json"
             ;;
     esac
@@ -546,8 +494,6 @@ cmd_switch() {
         exit 0
     fi
     
-    # wait_for_claude_close
-    
     local active_account sequence
     active_account=$(jq -r '.activeAccountNumber' "$SEQUENCE_FILE")
     sequence=($(jq -r '.sequence[]' "$SEQUENCE_FILE"))
@@ -607,7 +553,6 @@ cmd_switch_to() {
         exit 1
     fi
     
-    # wait_for_claude_close
     perform_switch "$target_account"
 }
 
@@ -703,9 +648,9 @@ show_usage() {
 
 # Main script logic
 main() {
-    # Basic checks - allow root execution in containers
-    if [[ $EUID -eq 0 ]] && ! is_running_in_container; then
-        echo "Error: Do not run this script as root (unless running in a container)"
+    # Prevent running as root
+    if [[ $EUID -eq 0 ]]; then
+        echo "Error: Do not run this script as root"
         exit 1
     fi
     
