@@ -176,10 +176,11 @@ setup_directories() {
 is_claude_running() {
     # Use pgrep for better cross-platform compatibility
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -x "claude" >/dev/null 2>&1 || pgrep -f "claude" >/dev/null 2>&1
+        # Try exact match first, then fallback to pattern match
+        pgrep -x "claude" >/dev/null 2>&1 || pgrep -x "Claude" >/dev/null 2>&1
     else
         # Fallback to ps with basic syntax supported everywhere
-        ps aux 2>/dev/null | grep -v grep | grep -q "[c]laude"
+        ps aux 2>/dev/null | grep -v grep | grep -q "[C]laude"
     fi
 }
 

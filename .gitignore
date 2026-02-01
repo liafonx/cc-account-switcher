@@ -2,6 +2,9 @@
 # Claude Code local configuration files
 .claude/settings.local.json
 
+# Backup files
+*.backup
+
 # OS files
 .DS_Store
 Thumbs.db
