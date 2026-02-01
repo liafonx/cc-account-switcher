@@ -440,7 +440,7 @@ remove_from_shell_profile() {
     
     # Create temporary file
     local temp_file
-    temp_file=$(mktemp "${profile_file}.XXXXXX")
+    temp_file=$(mktemp)
     
     # Remove lines between markers (inclusive)
     awk -v start="$CC_MARKER_START" -v end="$CC_MARKER_END" '
@@ -1044,11 +1044,11 @@ perform_switch_to_api() {
     echo "Environment variables have been added to your shell profile and will be available"
     echo "in all new terminal sessions."
     echo ""
-    echo "To activate in your current terminal session, run:"
-    echo "  eval \"\$(./ccswitch.sh --env-setup)\""
+    echo "For one-command switching, add this wrapper function to your shell profile:"
+    echo "  ccswitch() { \"\${CCSWITCH_PATH:-./ccswitch.sh}\" \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }"
     echo ""
-    echo "Or simply use the wrapper function (add to your shell profile for convenience):"
-    echo "  ccswitch() { ./ccswitch.sh \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }"
+    echo "To activate in your current terminal session:"
+    echo "  source ~/.claude/.api_env"
     echo ""
     echo "After activation, restart Claude Code to use the new API configuration."
     echo ""
@@ -1101,13 +1101,13 @@ show_usage() {
     echo "  $0 --switch-to user@example.com"
     echo "  $0 --remove-account user@example.com"
     echo ""
-    echo "  # For one-command switching with immediate activation (API accounts):"
-    echo "  eval \"\$($0 --switch-to 2 && $0 --env-setup)\""
-    echo ""
-    echo "  # Or add this function to your shell profile for convenience:"
+    echo "Recommended Setup - Add wrapper function to shell profile for one-command switching:"
+    echo "  # Add to ~/.zshrc or ~/.bashrc"
     echo "  ccswitch() {"
-    echo "    ./ccswitch.sh \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env"
+    echo "    \"\${CCSWITCH_PATH:-/path/to/ccswitch.sh}\" \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env"
     echo "  }"
+    echo ""
+    echo "  Then use: ccswitch --switch-to 2"
 }
 
 # Main script logic

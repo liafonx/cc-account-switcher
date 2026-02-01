@@ -17,11 +17,17 @@ A simple tool to manage and switch between multiple Claude Code accounts on macO
 
 ## Installation
 
-Download the script directly:
+Download and install the script:
 
 ```bash
+# Download the script
 curl -O https://raw.githubusercontent.com/ming86/cc-account-switcher/main/ccswitch.sh
 chmod +x ccswitch.sh
+
+# Optional: Move to a permanent location
+sudo mv ccswitch.sh /usr/local/bin/ccswitch.sh
+# Or keep it in your home directory
+# mv ccswitch.sh ~/bin/ccswitch.sh
 ```
 
 ## Quick Start
@@ -30,7 +36,11 @@ chmod +x ccswitch.sh
 
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
-ccswitch() { ./ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+# If installed to /usr/local/bin:
+ccswitch() { /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+
+# Or if kept in ~/bin:
+# ccswitch() { ~/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
 ```
 
 Then reload: `source ~/.zshrc` (or `source ~/.bashrc`)
@@ -56,9 +66,15 @@ The wrapper automatically handles environment variable activation for API accoun
 For the easiest experience, add this wrapper function to your shell profile (`.zshrc` or `.bashrc`):
 
 ```bash
+# If installed to /usr/local/bin:
 ccswitch() {
-    ./ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+    /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
 }
+
+# Or if kept in ~/bin:
+# ccswitch() {
+#     ~/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+# }
 ```
 
 Then reload your profile with `source ~/.zshrc` (or `source ~/.bashrc`). Now you can switch accounts with a single command:
