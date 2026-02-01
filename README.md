@@ -4,9 +4,11 @@ A simple tool to manage and switch between multiple Claude Code accounts on macO
 
 ## Features
 
+- **One-command switching**: Single command to switch between any account type (OAuth or API)
 - **Multi-account management**: Add, remove, and list Claude Code accounts
 - **Quick switching**: Switch between accounts with simple commands
 - **OAuth and API support**: Manage both Claude official subscription accounts (OAuth) and custom API endpoints
+- **Automatic activation**: Wrapper function automatically activates API environment variables in your current shell
 - **Persistent configuration**: API credentials are automatically added to your shell profile (.zshrc/.bashrc) for persistence across terminal sessions
 - **IDE plugin support**: Works seamlessly with Claude Code IDE plugins (VS Code, JetBrains, etc.)
 - **Cross-platform**: Works on macOS, Linux, and WSL
@@ -15,14 +17,74 @@ A simple tool to manage and switch between multiple Claude Code accounts on macO
 
 ## Installation
 
-Download the script directly:
+Download and install the script:
 
 ```bash
+# Download the script
 curl -O https://raw.githubusercontent.com/ming86/cc-account-switcher/main/ccswitch.sh
 chmod +x ccswitch.sh
+
+# Optional: Move to a permanent location
+sudo mv ccswitch.sh /usr/local/bin/ccswitch.sh
+# Or keep it in your home directory
+# mv ccswitch.sh ~/bin/ccswitch.sh
 ```
 
+## Quick Start
+
+**For the simplest experience, add this one-line wrapper to your shell profile:**
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+# If installed to /usr/local/bin:
+ccswitch() { /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+
+# Or if kept in ~/bin:
+# ccswitch() { ~/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+```
+
+Then reload: `source ~/.zshrc` (or `source ~/.bashrc`)
+
+**Now you can switch accounts with a single command:**
+
+```bash
+# OAuth accounts (Claude official subscription)
+ccswitch --switch-to user@example.com
+
+# API accounts (custom endpoints)
+ccswitch --switch-to 2
+
+# Both types work the same way - just one command!
+```
+
+The wrapper automatically handles environment variable activation for API accounts while keeping OAuth switching simple. Changes persist across terminal sessions.
+
 ## Usage
+
+### One-Command Switching (Recommended)
+
+For the easiest experience, add this wrapper function to your shell profile (`.zshrc` or `.bashrc`):
+
+```bash
+# If installed to /usr/local/bin:
+ccswitch() {
+    /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+}
+
+# Or if kept in ~/bin:
+# ccswitch() {
+#     ~/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+# }
+```
+
+Then reload your profile with `source ~/.zshrc` (or `source ~/.bashrc`). Now you can switch accounts with a single command:
+
+```bash
+ccswitch --switch-to 2  # Switches and activates immediately
+ccswitch --switch       # Rotate to next account
+```
+
+**How it works**: The wrapper automatically sources API environment variables after switching, so API accounts work immediately in your current terminal session. The changes also persist across terminal sessions via your shell profile.
 
 ### Basic Commands
 
@@ -122,31 +184,25 @@ API accounts allow you to use Claude Code with custom API endpoints instead of t
 
 ### Switching to an API Account
 
-When you switch to an API account, the script automatically:
-
-1. **Updates your shell profile** (`.zshrc`, `.bashrc`, etc.) with the API environment variables
-2. Creates a temporary environment file at `~/.claude/.api_env`
+**With the wrapper function** (see [Quick Start](#quick-start)):
 
 ```bash
-./ccswitch.sh --switch-to 2  # or use the account number from --list
+ccswitch --switch-to 2  # One command - automatically activates!
 ```
 
-**Persistence Across Terminal Sessions**:
+**Without the wrapper function**:
 
-The environment variables are automatically added to your shell profile, so they persist across terminal sessions. You have three options to activate them:
+```bash
+./ccswitch.sh --switch-to 2
+eval "$(./ccswitch.sh --env-setup)"  # Activate in current terminal
+```
 
-1. **Start a new terminal** (recommended for IDE plugins) - Variables are automatically available
-2. **Reload your shell profile**: `source ~/.zshrc` (or `~/.bashrc` for Bash users)
-3. **Source the API env file**: `source ~/.claude/.api_env` (temporary, current session only)
+**What happens**:
 
-**Claude Code IDE Plugin Support**:
-
-When using Claude Code as an IDE plugin (VS Code, JetBrains, etc.), the environment variables from your shell profile are automatically available. After switching accounts, simply:
-
-- Restart your IDE, or
-- Reload the IDE window
-
-The plugin will automatically read `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from your environment.
+1. ✓ API credentials are written to your shell profile (`.zshrc`/`.bashrc`) for persistence
+2. ✓ Environment variables are activated in your current terminal (when using wrapper or eval)
+3. ✓ New terminal sessions automatically have the correct variables
+4. ✓ IDE plugins (VS Code, JetBrains) automatically use the environment variables after IDE restart
 
 ### Switching Between OAuth and API Accounts
 
