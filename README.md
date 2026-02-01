@@ -24,6 +24,25 @@ chmod +x ccswitch.sh
 
 ## Usage
 
+### One-Command Switching (Recommended)
+
+For the easiest experience, add this wrapper function to your shell profile (`.zshrc` or `.bashrc`):
+
+```bash
+ccswitch() {
+    ./ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+}
+```
+
+Then reload your profile with `source ~/.zshrc` (or `source ~/.bashrc`). Now you can switch accounts with a single command:
+
+```bash
+ccswitch --switch-to 2  # Switches and activates immediately
+ccswitch --switch       # Rotate to next account
+```
+
+**How it works**: The wrapper automatically sources API environment variables after switching, so API accounts work immediately in your current terminal session. The changes also persist across terminal sessions via your shell profile.
+
 ### Basic Commands
 
 ```bash
@@ -122,22 +141,42 @@ API accounts allow you to use Claude Code with custom API endpoints instead of t
 
 ### Switching to an API Account
 
-When you switch to an API account, the script automatically:
+The script makes account switching as simple as possible:
 
-1. **Updates your shell profile** (`.zshrc`, `.bashrc`, etc.) with the API environment variables
-2. Creates a temporary environment file at `~/.claude/.api_env`
+#### Option 1: One-Command Switch (Recommended)
+
+Use the shell wrapper function for the simplest experience. Add this to your shell profile (`.zshrc` or `.bashrc`):
 
 ```bash
-./ccswitch.sh --switch-to 2  # or use the account number from --list
+ccswitch() {
+    ./ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env
+}
+```
+
+Then switch accounts with a single command:
+```bash
+ccswitch --switch-to 2  # Automatically activates in current terminal
+```
+
+#### Option 2: Manual Activation
+
+Run the switch command and then activate the environment:
+
+```bash
+./ccswitch.sh --switch-to 2
+eval "$(./ccswitch.sh --env-setup)"  # Activate in current terminal
 ```
 
 **Persistence Across Terminal Sessions**:
 
-The environment variables are automatically added to your shell profile, so they persist across terminal sessions. You have three options to activate them:
+The environment variables are automatically added to your shell profile, so they persist across terminal sessions. New terminals will automatically have the correct environment variables set.
 
-1. **Start a new terminal** (recommended for IDE plugins) - Variables are automatically available
-2. **Reload your shell profile**: `source ~/.zshrc` (or `~/.bashrc` for Bash users)
-3. **Source the API env file**: `source ~/.claude/.api_env` (temporary, current session only)
+**For the Current Terminal Session**:
+
+- **Use the wrapper function** (Option 1 above) - simplest, one command
+- **Use eval with --env-setup** (Option 2 above) - activates immediately
+- **Reload your shell profile**: `source ~/.zshrc` (or `~/.bashrc` for Bash)
+- **Source the API env file**: `source ~/.claude/.api_env`
 
 **Claude Code IDE Plugin Support**:
 

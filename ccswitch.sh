@@ -1042,16 +1042,32 @@ perform_switch_to_api() {
     echo "API account activated!"
     echo ""
     echo "Environment variables have been added to your shell profile and will be available"
-    echo "in all new terminal sessions. For the current session, either:"
+    echo "in all new terminal sessions."
     echo ""
-    local profile_path
-    profile_path=$(detect_shell_profile)
-    echo "  Option 1: Start a new terminal (recommended for IDE plugins)"
-    echo "  Option 2: Reload your shell profile: source $profile_path"
-    echo "  Option 3: Source the API env file: source $HOME/.claude/.api_env"
+    echo "To activate in your current terminal session, run:"
+    echo "  eval \"\$(./ccswitch.sh --env-setup)\""
     echo ""
-    echo "Claude Code and IDE plugins will automatically use these environment variables."
+    echo "Or simply use the wrapper function (add to your shell profile for convenience):"
+    echo "  ccswitch() { ./ccswitch.sh \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }"
     echo ""
+    echo "After activation, restart Claude Code to use the new API configuration."
+    echo ""
+}
+
+# Output environment setup commands for eval
+cmd_env_setup() {
+    local env_file="$HOME/.claude/.api_env"
+    
+    # Check if API env file exists
+    if [[ ! -f "$env_file" ]]; then
+        # No API account active, clear any existing env vars
+        echo "unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN"
+        return 0
+    fi
+    
+    # Source the env file and output the exports
+    # Read and output the exports from the file
+    grep "^export" "$env_file" 2>/dev/null || true
 }
 
 # Show usage
@@ -1066,6 +1082,7 @@ show_usage() {
     echo "  --list                           List all managed accounts"
     echo "  --switch                         Rotate to next account in sequence"
     echo "  --switch-to <num|email>          Switch to specific account number or email"
+    echo "  --env-setup                      Output environment setup commands (use with eval)"
     echo "  --help                           Show this help message"
     echo ""
     echo "Examples:"
@@ -1083,6 +1100,14 @@ show_usage() {
     echo "  $0 --switch-to 2"
     echo "  $0 --switch-to user@example.com"
     echo "  $0 --remove-account user@example.com"
+    echo ""
+    echo "  # For one-command switching with immediate activation (API accounts):"
+    echo "  eval \"\$($0 --switch-to 2 && $0 --env-setup)\""
+    echo ""
+    echo "  # Or add this function to your shell profile for convenience:"
+    echo "  ccswitch() {"
+    echo "    ./ccswitch.sh \"\$@\" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env"
+    echo "  }"
 }
 
 # Main script logic
@@ -1117,6 +1142,9 @@ main() {
         --switch-to)
             shift
             cmd_switch_to "$@"
+            ;;
+        --env-setup)
+            cmd_env_setup
             ;;
         --help)
             show_usage
