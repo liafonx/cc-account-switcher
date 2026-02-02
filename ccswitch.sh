@@ -70,6 +70,21 @@ get_claude_config_path() {
     echo "$fallback_config"
 }
 
+# Get ISO 8601 timestamp - cross-platform compatible
+get_iso_timestamp() {
+    # Works on both GNU (Linux) and BSD (macOS) date
+    if date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null; then
+        return 0
+    fi
+    # Fallback using Python if available
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "import datetime; print(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))"
+        return 0
+    fi
+    # Last resort: simple date format
+    date -u +%Y-%m-%dT%H:%M:%S 2>/dev/null || date +%Y-%m-%dT%H:%M:%S
+}
+
 # Basic validation that JSON is valid
 validate_json() {
     local file="$1"
@@ -153,9 +168,16 @@ setup_directories() {
     chmod 700 "$BACKUP_DIR"/{configs,credentials}
 }
 
-# Claude Code process detection (Node.js app)
+# Claude Code process detection (Node.js app) - Cross-platform compatible
 is_claude_running() {
-    ps -eo pid,comm,args | awk '$2 == "claude" || $3 == "claude" {exit 0} END {exit 1}'
+    # Use pgrep for better cross-platform compatibility
+    if command -v pgrep >/dev/null 2>&1; then
+        # Try exact match first, then fallback to pattern match
+        pgrep -x "claude" >/dev/null 2>&1 || pgrep -x "Claude" >/dev/null 2>&1
+    else
+        # Fallback to ps with basic syntax supported everywhere
+        ps aux 2>/dev/null | grep -v grep | grep -q "[C]laude"
+    fi
 }
 
 # Wait for Claude Code to close (no timeout - user controlled)
@@ -458,7 +480,7 @@ init_sequence_file() {
     if [[ ! -f "$SEQUENCE_FILE" ]]; then
         local init_content='{
   "activeAccountNumber": null,
-  "lastUpdated": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "lastUpdated": "'$(get_iso_timestamp)'",
   "sequence": [],
   "accounts": {}
 }'
@@ -470,7 +492,7 @@ init_sequence_file() {
 init_api_accounts_file() {
     if [[ ! -f "$API_ACCOUNTS_FILE" ]]; then
         local init_content='{
-  "lastUpdated": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "lastUpdated": "'$(get_iso_timestamp)'",
   "accounts": {}
 }'
         write_json "$API_ACCOUNTS_FILE" "$init_content"
@@ -544,7 +566,7 @@ add_api_account_from_env() {
     
     # Store API credentials
     local updated_api_accounts
-    updated_api_accounts=$(jq --arg num "$account_num" --arg url "$base_url" --arg token "$auth_token" --arg name "$account_name" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_api_accounts=$(jq --arg num "$account_num" --arg url "$base_url" --arg token "$auth_token" --arg name "$account_name" --arg now "$(get_iso_timestamp)" '
         .accounts[$num] = {
             name: $name,
             baseUrl: $url,
@@ -558,7 +580,7 @@ add_api_account_from_env() {
     
     # Update sequence.json with unique identifier
     local updated_sequence
-    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_identifier" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$account_num" --arg name "$account_name" --arg uuid "$api_identifier" --arg now "$(get_iso_timestamp)" '
         .accounts[$num] = {
             email: $name,
             uuid: $uuid,
@@ -626,7 +648,7 @@ cmd_add_account() {
     
     # Update sequence.json
     local updated_sequence
-    updated_sequence=$(jq --arg num "$account_num" --arg email "$current_email" --arg uuid "$account_uuid" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$account_num" --arg email "$current_email" --arg uuid "$account_uuid" --arg now "$(get_iso_timestamp)" '
         .accounts[$num] = {
             email: $email,
             uuid: $uuid,
@@ -711,7 +733,7 @@ cmd_remove_account() {
     if [[ "$account_type" == "api" ]]; then
         # Remove API account data
         local updated_api_accounts
-        updated_api_accounts=$(jq --arg num "$account_num" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        updated_api_accounts=$(jq --arg num "$account_num" --arg now "$(get_iso_timestamp)" '
             del(.accounts[$num]) |
             .lastUpdated = $now
         ' "$API_ACCOUNTS_FILE")
@@ -731,7 +753,7 @@ cmd_remove_account() {
     
     # Update sequence.json
     local updated_sequence
-    updated_sequence=$(jq --arg num "$account_num" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$account_num" --arg now "$(get_iso_timestamp)" '
         del(.accounts[$num]) |
         .sequence = (.sequence | map(select(. != ($num | tonumber)))) |
         .lastUpdated = $now
@@ -840,8 +862,6 @@ cmd_switch() {
         fi
     fi
     
-    # wait_for_claude_close
-    
     # Find next account in sequence
     local next_account current_index=0
     for i in "${!sequence[@]}"; do
@@ -897,7 +917,6 @@ cmd_switch_to() {
         exit 1
     fi
     
-    # wait_for_claude_close
     perform_switch "$target_account"
 }
 
@@ -981,7 +1000,7 @@ perform_switch_to_oauth() {
     
     # Step 4: Update state
     local updated_sequence
-    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$target_account" --arg now "$(get_iso_timestamp)" '
         .activeAccountNumber = ($num | tonumber) |
         .lastUpdated = $now
     ' "$SEQUENCE_FILE")
@@ -1027,7 +1046,7 @@ perform_switch_to_api() {
     
     # Update state
     local updated_sequence
-    updated_sequence=$(jq --arg num "$target_account" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    updated_sequence=$(jq --arg num "$target_account" --arg now "$(get_iso_timestamp)" '
         .activeAccountNumber = ($num | tonumber) |
         .lastUpdated = $now
     ' "$SEQUENCE_FILE")

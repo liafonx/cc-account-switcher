@@ -14,23 +14,50 @@ A simple command-line tool to manage and switch between multiple Claude Code acc
 
 ## Installation
 
+### Quick Install (Recommended)
+
+Install with a single command:
+
+```bash
+bash -c "$(curl -H 'Cache-Control: no-cache, no-store' -fsSL https://raw.githubusercontent.com/liafonx/cc-account-switcher/main/install.sh)"
+```
+
+This will:
+- Check and install dependencies (jq)
+- Download the latest version of ccswitch.sh
+- Install to `~/.local/bin/ccswitch.sh`
+- Set up the shell wrapper function automatically
+- Add the installation directory to your PATH
+
+After installation, reload your shell:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+### Manual Installation
+
 ```bash
 # Download the script
-curl -O https://raw.githubusercontent.com/ming86/cc-account-switcher/main/ccswitch.sh
+curl -O https://raw.githubusercontent.com/liafonx/cc-account-switcher/main/ccswitch.sh
 chmod +x ccswitch.sh
 
 # Move to a permanent location
+mkdir -p ~/.local/bin
+mv ccswitch.sh ~/.local/bin/ccswitch.sh
+
+# Or install system-wide (requires sudo)
 sudo mv ccswitch.sh /usr/local/bin/ccswitch.sh
-# Or: mv ccswitch.sh ~/bin/ccswitch.sh
 ```
 
-### Setup Shell Wrapper (Recommended)
+### Setup Shell Wrapper
 
-Add this wrapper to your shell profile for seamless account switching:
+The quick install script automatically sets up the wrapper function. If you installed manually, add this wrapper to your shell profile for seamless account switching:
 
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
-ccswitch() { /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+ccswitch() { ~/.local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
+# Or if installed system-wide:
+# ccswitch() { /usr/local/bin/ccswitch.sh "$@" && [[ -f ~/.claude/.api_env ]] && source ~/.claude/.api_env; }
 ```
 
 Then reload: `source ~/.zshrc` (or `source ~/.bashrc`)
@@ -99,16 +126,25 @@ export ANTHROPIC_AUTH_TOKEN='your-api-token'
 
 ## Prerequisites
 
-- **Bash 4.4+**
-- **jq** (JSON processor)
+- **Bash 4.4+** (automatically checked during installation)
+- **jq** (JSON processor - automatically installed by the install script)
 
-Install jq:
+### Manual jq Installation
+
+If you're installing manually or the automatic installation fails:
+
 ```bash
 # macOS
 brew install jq
 
 # Linux (Debian/Ubuntu)
 sudo apt install jq
+
+# Linux (Fedora/RHEL)
+sudo dnf install jq
+
+# Linux (Arch)
+sudo pacman -S jq
 ```
 
 ### Custom API Endpoints
